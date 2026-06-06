@@ -127,6 +127,30 @@ else
     fail "Codex install keeps humanize-rlcr entrypoint skill" "skills/humanize-rlcr/SKILL.md exists" "missing"
 fi
 
+if [[ -f "$CODEX_HOME_DIR/skills/humanize-codex-goal/SKILL.md" ]]; then
+    pass "Codex install syncs humanize-codex-goal skill"
+else
+    fail "Codex install syncs humanize-codex-goal skill" "skills/humanize-codex-goal/SKILL.md exists" "missing"
+fi
+
+if [[ -f "$CODEX_HOME_DIR/skills/humanize-cgcr/SKILL.md" ]]; then
+    pass "Codex install syncs humanize-cgcr launcher skill"
+else
+    fail "Codex install syncs humanize-cgcr launcher skill" "skills/humanize-cgcr/SKILL.md exists" "missing"
+fi
+
+if [[ -f "$CODEX_HOME_DIR/skills/humanize/commands/monitor-codex-goal.md" ]]; then
+    pass "Codex runtime bundle includes Claude monitor command for CGCR launcher"
+else
+    fail "Codex runtime bundle includes Claude monitor command for CGCR launcher" "skills/humanize/commands/monitor-codex-goal.md exists" "missing"
+fi
+
+if [[ -f "$CODEX_HOME_DIR/skills/humanize/skills/monitor-codex-goal/SKILL.md" ]]; then
+    pass "Codex runtime bundle includes Claude monitor skill for CGCR launcher"
+else
+    fail "Codex runtime bundle includes Claude monitor skill for CGCR launcher" "skills/humanize/skills/monitor-codex-goal/SKILL.md exists" "missing"
+fi
+
 if [[ -f "$HOOKS_FILE" ]]; then
     pass "Codex install writes hooks.json"
 else

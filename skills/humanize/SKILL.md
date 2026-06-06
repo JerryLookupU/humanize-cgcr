@@ -47,7 +47,23 @@ The RLCR (Ralph-Loop with Codex Review) loop has two phases:
 - If no issues → loop completes with Finalize Phase
 - On Codex CLI `0.114.0+` with `codex_hooks` enabled, Humanize installs a native `Stop` hook so exit gating runs automatically
 
-### 2. Generate Plan - Structured Plan from Draft
+### 2. CGCR - Codex Goal with Claude Review
+
+CGCR is optional and does not replace RLCR:
+
+- Codex `/goal` implements.
+- Claude Code monitors as a read-only reviewer.
+- Claude Code must not edit files, build, test, commit, reset, install
+  packages, or drive implementation.
+- Feedback flows only through gated `[MONITOR]` tmux injection.
+- CGCR is not a dual-executor system; reject any design that requires Claude
+  Code to mutate the repo or repair code directly.
+
+Use `humanize-codex-goal` on the Codex side and
+`/flow:humanize-cgcr` when you want Codex to start the two-tmux topology.
+Use `/humanize:monitor-codex-goal` only on the Claude side.
+
+### 3. Generate Plan - Structured Plan from Draft
 
 Transforms a rough draft document into a structured implementation plan with:
 - Clear goal description

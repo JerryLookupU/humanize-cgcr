@@ -5,6 +5,7 @@
 - [codex](https://github.com/openai/codex) -- OpenAI Codex CLI (for review). Verify with `codex --version`.
 - `jq` -- JSON processor. Verify with `jq --version`.
 - `git` -- Git version control. Verify with `git --version`.
+- `tmux` -- Optional, required only for Codex Goal with Claude Review monitoring.
 
 ## Option 1: Git Marketplace (Recommended)
 
@@ -53,7 +54,14 @@ After installing, you should see Humanize commands available:
 /humanize:gen-plan
 /humanize:refine-plan
 /humanize:ask-codex
+/humanize:monitor-codex-goal
 ```
+
+`/humanize:monitor-codex-goal` is optional and belongs to CGCR: Codex `/goal`
+implements while Claude Code monitors as a read-only reviewer. It is not RLCR.
+Run it in Claude Code, not in Codex. The Codex side uses `/goal` or
+`/flow:humanize-codex-goal`. The Codex-side launcher for the two-tmux topology
+is `/flow:humanize-cgcr`; it is not a Claude Code command.
 
 ## Monitor Setup (Optional)
 
@@ -69,6 +77,26 @@ Then use:
 ```bash
 humanize monitor rlcr   # Monitor RLCR loop
 ```
+
+## Optional: Codex Goal with Claude Review
+
+CGCR reverses the RLCR roles:
+
+- RLCR: `/humanize:start-rlcr-loop` means Claude Code implements and Codex reviews.
+- CGCR: `/humanize:monitor-codex-goal` means Codex `/goal` implements and Claude Code reviews.
+
+Recommended first monitor run:
+
+```text
+/humanize:monitor-codex-goal --discover --notify-only
+```
+
+For the simpler end-to-end startup, install Humanize for Codex and run
+`/flow:humanize-cgcr <long task prompt>` from Codex. That flow creates the
+Codex and Claude monitor tmux windows and prepares both prompts.
+
+The Claude monitor must stay read-only except for gated `[MONITOR]` tmux
+injection. See [Codex Goal with Claude Review](codex-goal-claude-review.md).
 
 ## Other Install Guides
 
