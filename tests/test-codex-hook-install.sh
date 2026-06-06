@@ -311,6 +311,56 @@ else
     fail "Codex feature enable runs on each Codex install/update" "2 log entries" "$(cat "$FEATURE_LOG")"
 fi
 
+HOOKS_FEATURE_BIN="$TEST_DIR/bin-hooks-feature"
+HOOKS_FEATURE_HOME="$TEST_DIR/codex-home-hooks-feature"
+HOOKS_FEATURE_LOG="$TEST_DIR/codex-hooks-feature.log"
+mkdir -p "$HOOKS_FEATURE_BIN" "$HOOKS_FEATURE_HOME"
+
+cat > "$HOOKS_FEATURE_BIN/codex" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${1:-}" == "features" && "${2:-}" == "list" ]]; then
+    cat <<'LIST'
+hooks                            stable             true
+LIST
+    exit 0
+fi
+
+if [[ "${1:-}" == "features" && "${2:-}" == "enable" && "${3:-}" == "hooks" ]]; then
+    printf 'CODEX_HOME=%s feature=%s\n' "${CODEX_HOME:-}" "${3:-}" >> "${TEST_CODEX_FEATURE_LOG:?}"
+    mkdir -p "${CODEX_HOME:?}"
+    : > "${CODEX_HOME}/.hooks-enabled"
+    exit 0
+fi
+
+if [[ "${1:-}" == "exec" ]]; then
+    cat <<'OUT'
+LESSON_IDS: NONE
+RATIONALE: No matching lessons found (fake codex exec).
+OUT
+    exit 0
+fi
+
+echo "unexpected fake codex invocation: $*" >&2
+exit 1
+EOF
+chmod +x "$HOOKS_FEATURE_BIN/codex"
+
+PATH="$HOOKS_FEATURE_BIN:$PATH" TEST_CODEX_FEATURE_LOG="$HOOKS_FEATURE_LOG" XDG_CONFIG_HOME="$XDG_CONFIG_HOME_DIR" \
+    "$INSTALL_SCRIPT" \
+    --target codex \
+    --codex-config-dir "$HOOKS_FEATURE_HOME" \
+    --codex-skills-dir "$HOOKS_FEATURE_HOME/skills" \
+    --command-bin-dir "$COMMAND_BIN_DIR" \
+    > "$TEST_DIR/install-hooks-feature.log" 2>&1
+
+if [[ -f "$HOOKS_FEATURE_HOME/.hooks-enabled" ]]; then
+    pass "Codex install supports current hooks feature name"
+else
+    fail "Codex install supports current hooks feature name" ".hooks-enabled marker exists" "$(cat "$TEST_DIR/install-hooks-feature.log")"
+fi
+
 UNSUPPORTED_BIN="$TEST_DIR/bin-unsupported"
 UNSUPPORTED_HOME="$TEST_DIR/codex-home-unsupported"
 mkdir -p "$UNSUPPORTED_BIN" "$UNSUPPORTED_HOME"
@@ -347,11 +397,11 @@ else
     fail "Codex install rejects builds without native hooks support" "non-zero exit" "exit 0"
 fi
 
-if grep -q "codex_hooks feature" "$TEST_DIR/install-unsupported.log"; then
-    pass "Unsupported Codex failure explains missing codex_hooks feature"
+if grep -q "hooks/codex_hooks feature" "$TEST_DIR/install-unsupported.log"; then
+    pass "Unsupported Codex failure explains missing hooks feature"
 else
-    fail "Unsupported Codex failure explains missing codex_hooks feature" \
-        "error mentioning codex_hooks feature" \
+    fail "Unsupported Codex failure explains missing hooks feature" \
+        "error mentioning hooks/codex_hooks feature" \
         "$(cat "$TEST_DIR/install-unsupported.log")"
 fi
 
