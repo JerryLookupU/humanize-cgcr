@@ -17,8 +17,10 @@ Repo-native Codex command:
 /flow:humanize-cgcr <long task prompt>
 ```
 
-If a Codex client provides a `/humanize:cgcr` alias, it must delegate to this
-same Codex flow. Do not implement `/humanize:cgcr` as a Claude Code command.
+`/humanize:cgcr` is the public CGCR command name. In Codex startup context it
+must delegate to this same Codex flow or the existing `setup-cgcr.sh` launcher
+path. Claude-side monitoring may expose `/humanize:cgcr` as an alias for the
+lower-level `/humanize:monitor-codex-goal` monitor behavior.
 
 ## Role Boundary
 
@@ -33,6 +35,65 @@ CGCR is not a dual-executor system:
 
 If any approach would require Claude Code to mutate the repository, reject that
 approach and keep feedback routed through the monitor protocol.
+
+## Codex Execution Contract
+
+The source of truth for the Codex execution-side contract is
+`skills/humanize-codex-goal/SKILL.md`. This launcher must prepare prompts that
+require the same lifecycle markers, and Codex must emit them during the
+monitored `/goal`.
+
+Required start marker:
+
+```text
+[GOAL-BINDING]
+MONITOR_TARGET_ID: <unique-goal-id>
+repo:
+branch:
+codex_session_id:
+tmux_target:
+started_at:
+```
+
+Required checkpoint marker:
+
+```text
+[CHECKPOINT:<phase-name>]
+objective:
+files_touched:
+commands_run:
+verification:
+current_risk:
+next_step:
+```
+
+Required monitor acknowledgement marker:
+
+```text
+[MONITOR-ACK]
+understood_issue:
+correction_plan:
+will_not_do:
+next_action:
+```
+
+Required closeout marker:
+
+```text
+[GOAL-CLOSEOUT]
+outcome:
+files_changed:
+commits:
+commands_run:
+tests_or_verification:
+known_risks:
+followups:
+```
+
+Codex is the only implementation agent. Claude Code is reviewer/monitor only
+and must remain read-only except for gated `[MONITOR]` tmux injection. If a
+`[MONITOR]` message conflicts with the original goal, Codex pauses and asks the
+user instead of silently following either side.
 
 ## What This Flow Starts
 
@@ -89,7 +150,8 @@ session name, Codex tmux target, Claude monitor tmux target, and prompt files.
 
 - Use `/flow:humanize-codex-goal` only when you want to run the execution
   contract manually in an existing Codex `/goal` session.
-- Use `/humanize:monitor-codex-goal` only inside Claude Code, in the separate
-  monitor tmux window.
+- Use `/humanize:cgcr` as the public CGCR name. The lower-level
+  `/humanize:monitor-codex-goal` command remains available inside Claude Code in
+  the separate monitor tmux window.
 - RLCR remains `/flow:humanize-rlcr` on Codex and
   `/humanize:start-rlcr-loop` on Claude Code.

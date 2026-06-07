@@ -19,7 +19,8 @@ CGCR means Codex Goal with Claude Review:
 
 - Codex `/goal` implements.
 - Claude Code reviews and monitors.
-- New Claude Code command: `/humanize:monitor-codex-goal`
+- Public command: `/humanize:cgcr`
+- Lower-level Claude Code monitor command: `/humanize:monitor-codex-goal`
 - New Codex launcher flow: `/flow:humanize-cgcr`
 
 Claude must be a reviewer with an injection protocol, not a second executor.
@@ -32,7 +33,8 @@ Do not mix Claude Code commands with Codex commands.
 | Side | Command | Purpose |
 |------|---------|---------|
 | Claude Code | `/humanize:start-rlcr-loop` | Start RLCR: Claude implements, Codex reviews |
-| Claude Code | `/humanize:monitor-codex-goal` | Start or tick CGCR monitoring |
+| Claude Code | `/humanize:cgcr` | Public CGCR monitor wrapper |
+| Claude Code | `/humanize:monitor-codex-goal` | Lower-level CGCR monitoring |
 | Codex | `/goal` | Execute the CGCR implementation goal |
 | Codex | `/flow:humanize-codex-goal` | Optional Codex-side CGCR execution contract |
 | Codex | `/flow:humanize-cgcr` | Start the two-tmux CGCR launcher |
@@ -54,7 +56,8 @@ but it must not be used as the Claude Code monitor command.
 CGCR is designed around two tmux panes or windows:
 
 - Codex pane/window: runs `codex` and the implementation `/goal`.
-- Claude monitor pane/window: runs `claude` and `/humanize:monitor-codex-goal`.
+- Claude monitor pane/window: runs `claude` and `/humanize:cgcr` or the
+  lower-level `/humanize:monitor-codex-goal`.
 
 The Claude monitor must observe and, only after the gate passes, inject a normal
 `[MONITOR]` prompt into the Codex tmux pane. Without a verified tmux target,
@@ -101,16 +104,19 @@ When the Codex skill runtime is installed, start the full two-tmux topology from
 Codex:
 
 ```text
+/humanize:cgcr <your long task prompt>
+```
+
+In Codex startup context this public command delegates to:
+
+```text
 /flow:humanize-cgcr <your long task prompt>
 ```
 
 This creates `.humanize/cgcr/<run-id>/`, starts a Codex `codex-goal` tmux
 window with a prepared `/goal` prompt, and starts a Claude `claude-monitor`
-tmux window with `/humanize:monitor-codex-goal`.
-
-If your Codex client exposes a `/humanize:cgcr` alias, it should delegate to
-`/flow:humanize-cgcr`. Do not implement `/humanize:cgcr` as a Claude Code
-command, because CGCR setup is owned by the Codex side.
+tmux window with `/humanize:cgcr` or the lower-level
+`/humanize:monitor-codex-goal`.
 
 ## Starting The Monitor
 
@@ -120,22 +126,22 @@ Use them from the separate Claude monitor tmux pane/window.
 Prefer explicit binding:
 
 ```text
-/humanize:monitor-codex-goal <session-id> <tmux-target> \
+/humanize:cgcr <session-id> <tmux-target> \
   --expect-goal <goal-id> \
-  --once \
+  --manual-loop \
   --notify-only
 ```
 
 Use discovery only to identify candidates:
 
 ```text
-/humanize:monitor-codex-goal --discover --notify-only
+/humanize:cgcr --discover --notify-only
 ```
 
 Periodic monitoring is optional:
 
 ```text
-/humanize:monitor-codex-goal <session-id> <tmux-target> \
+/humanize:cgcr <session-id> <tmux-target> \
   --expect-goal <goal-id> \
   --cadence 30m \
   --principles "no fake data; no stubs; do not broaden scope"
@@ -147,9 +153,27 @@ scheduling.
 
 When one-tick mode is not set, Claude Code may use built-in `CronCreate` to
 schedule recurring monitor ticks. The cron prompt must re-enter
-`/humanize:monitor-codex-goal` with `--once` or `--no-cron`, so a scheduled tick
-does not create another cron. Stop scheduled monitoring with `CronDelete` and
-the job id returned by `CronCreate`.
+`/humanize:cgcr` or `/humanize:monitor-codex-goal` with `--once` or
+`--no-cron`, so a scheduled tick does not create another cron. Stop scheduled
+monitoring with `CronDelete` and the job id returned by `CronCreate`.
+
+## Corrective Steer Shape
+
+When Claude detects repeated drift for the same `MONITOR_TARGET_ID`, it builds
+the corrective `[MONITOR]` prompt with `hooks/cgcr-steer-prompt-hook.sh`.
+
+The hook is read-only. It counts prior same-goal `[MONITOR:auto]` and
+`[MONITOR:approved]` prompts from the current transcript and chooses one of four
+prompt shapes by `count % 4`:
+
+1. simple guidance back to the original goal;
+2. explicit realignment with the cited mismatch;
+3. stop the tangent and classify current work;
+4. Occam review to choose the simplest sufficient path.
+
+The selected prompt does not mention its internal selector or count. Claude must
+still pass the normal binding, approval, and tmux injection gates before sending
+the prompt.
 
 ## Failure Modes
 

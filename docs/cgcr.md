@@ -1,0 +1,142 @@
+# CGCR
+
+CGCR means Codex Goal with Claude Review. It is the reverse workflow for
+Humanize's existing RLCR loop, and it does not replace RLCR.
+
+## Role Split
+
+| Workflow | Executor | Reviewer | Feedback path | Command |
+|----------|----------|----------|---------------|---------|
+| RLCR | Claude Code | Codex | Codex review result -> Claude loop | `/humanize:start-rlcr-loop` |
+| CGCR | Codex `/goal` or `/flow:humanize-cgcr` | Claude Code | Claude monitor -> gated `[MONITOR]` tmux injection | `/humanize:cgcr` |
+
+RLCR:
+
+- RLCR = Claude Code implements, Codex reviews.
+- Executor: Claude Code
+- Reviewer: Codex
+- Feedback path: Codex review result -> Claude loop
+- Command: `/humanize:start-rlcr-loop`
+
+CGCR:
+
+- CGCR = Codex `/goal` implements, Claude Code reviews.
+- Executor: Codex `/goal` or `/flow:humanize-cgcr`
+- Reviewer: Claude Code
+- Feedback path: Claude monitor -> gated `[MONITOR]` tmux injection
+- Command: `/humanize:cgcr`
+
+Claude Code is read-only by default in CGCR. It is not a second executor and
+must not edit files, run builds, run tests, commit, reset, install packages, or
+repair code directly. Claude feedback enters Codex only as a normal `[MONITOR]`
+prompt after the monitor gate.
+
+## Command Surface
+
+Use `/humanize:cgcr` as the public CGCR name.
+
+- Codex-side startup delegates to `/flow:humanize-cgcr <long task prompt>`.
+- Claude-side monitoring delegates to `/humanize:monitor-codex-goal`.
+- Lower-level monitor details are in `commands/monitor-codex-goal.md`.
+- Long-form workflow notes remain in `docs/codex-goal-claude-review.md`.
+
+Do not use CGCR as an RLCR command. RLCR remains
+`/humanize:start-rlcr-loop`.
+
+## Tmux Layout
+
+CGCR expects two tmux panes or windows:
+
+- Codex pane/window: runs `codex` and the implementation `/goal`.
+- Claude monitor pane/window: runs `claude` and `/humanize:cgcr` or the
+  lower-level `/humanize:monitor-codex-goal`.
+
+Without a verified tmux target, Claude may observe transcript and git state but
+must not inject.
+
+## Monitor Target
+
+Every monitored Codex goal must have a stable `MONITOR_TARGET_ID`.
+
+The Codex-side execution contract requires Codex to emit:
+
+```text
+[GOAL-BINDING]
+MONITOR_TARGET_ID: <unique-goal-id>
+repo:
+branch:
+codex_session_id:
+tmux_target:
+started_at:
+```
+
+The monitor binds by exact `codex_session_id`, exact `tmux_target`, and
+`MONITOR_TARGET_ID` when supplied by `--expect-goal`.
+
+## Exact Binding
+
+Claude must never guess the monitored goal. A valid binding requires:
+
+- one matching Codex transcript under `~/.codex/sessions/`;
+- one verified tmux target;
+- pane text that looks like the same Codex session;
+- transcript content containing the current `/goal`;
+- a consistent repo path across transcript, tmux, and git state;
+- matching `MONITOR_TARGET_ID` when `--expect-goal` is supplied.
+
+If discovery finds more than one plausible target, ask the user to confirm and
+do not inject.
+
+## Monitor Injection
+
+Claude may inject only through gated tmux input. The monitor must:
+
+1. Build the `[MONITOR]` prompt from fresh inspection.
+2. Type it with `tmux send-keys -l` without Enter.
+3. Capture the pane and verify the exact text landed in the Codex input area.
+4. Send Enter only after verification.
+5. Notify the user with the exact injected text.
+
+Codex must reply with `[MONITOR-ACK]` before acting. If `[MONITOR]` conflicts
+with the original user goal, Codex pauses and asks the user.
+
+## Steer Prompt Selection
+
+When the same Codex goal keeps drifting, Claude should not keep sending the same
+steer shape. Before drafting a steer, Claude reconstructs the original goal,
+latest user constraints, current Codex direction, and observed deviation from
+fresh transcript/git/tmux evidence.
+
+Use `hooks/cgcr-steer-prompt-hook.sh` to build the steer prompt. The hook counts
+prior `[MONITOR:auto]` and `[MONITOR:approved]` prompts for the same
+`MONITOR_TARGET_ID` from the current transcript, then chooses the prompt shape
+by `count % 4`:
+
+- simple guidance back to the original goal;
+- explicit realignment with the cited mismatch;
+- stop the tangent and classify work as in-scope, out-of-scope, or requiring
+  user confirmation;
+- Occam review: identify the simplest sufficient path and prune unnecessary
+  work.
+
+The internal selector is not written into the injected prompt. The hook only
+prints the prompt; the monitor still owns approval, tmux capture verification,
+and injection.
+
+## Failure Modes
+
+- Missing transcript: observe only if a verified pane exists; do not inject.
+- Missing tmux target: inspect transcript/git state only; do not inject.
+- Multiple plausible targets: ask the user; do not guess.
+- `MONITOR_TARGET_ID` mismatch: stop and notify; do not inject.
+- Stale draft or approval older than 10 minutes: re-inspect and redraft.
+- Scope expansion: reject the steer or ask the user.
+- Target completed, blocked, or unsafe: produce a terminal monitor result and
+  offer cleanup.
+
+## References
+
+- Long-form CGCR guide: `docs/codex-goal-claude-review.md`
+- State machine: `references/cgcr-state-machine.md`
+- Long-form monitor state reference:
+  `references/codex-goal-monitor-state-machine.md`

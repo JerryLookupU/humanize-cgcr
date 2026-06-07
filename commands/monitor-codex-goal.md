@@ -24,6 +24,7 @@ allowed-tools:
   - "Bash(tmux display-message:*)"
   - "Bash(tmux has-session:*)"
   - "Bash(tmux send-keys:*)"
+  - "Bash(${CLAUDE_PLUGIN_ROOT}/hooks/cgcr-steer-prompt-hook.sh:*)"
   - "Bash(date:*)"
   - "AskUserQuestion"
   - "CronCreate"
@@ -62,6 +63,11 @@ injection protocol.
 If a proposed approach would require Claude Code to edit files, run builds, run
 tests, commit, reset, or repair code directly, reject that approach and explain
 that CGCR permits only Codex implementation plus gated monitor prompts.
+
+When a corrective steer is needed, build the `[MONITOR]` prompt with
+`hooks/cgcr-steer-prompt-hook.sh`. The hook selects the prompt shape from the
+same-goal correction count modulo 4 and prints a prompt for the monitor to
+review, approve, or inject through the gated tmux protocol.
 
 ## Required Behavior
 

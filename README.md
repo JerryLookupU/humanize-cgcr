@@ -15,11 +15,12 @@ A Claude Code plugin that provides iterative development with independent AI rev
 Humanize also supports an optional reverse workflow, **CGCR** (Codex Goal with Claude Review), for cases where Codex `/goal` is the executor and Claude Code is a read-only reviewer/monitor.
 
 - `/humanize:start-rlcr-loop` = Claude Code implements, Codex reviews
-- `/humanize:monitor-codex-goal` in Claude Code = monitor Codex `/goal`
+- `/humanize:cgcr` = public CGCR command wrapper
+- `/humanize:monitor-codex-goal` in Claude Code = lower-level monitor command
 - `/goal` or `/flow:humanize-codex-goal` in Codex = execute the CGCR goal
 - `/flow:humanize-cgcr` in Codex = start the two-tmux CGCR topology
 
-CGCR is additive and does not replace RLCR. See [Codex Goal with Claude Review](docs/codex-goal-claude-review.md).
+CGCR is additive and does not replace RLCR. See [CGCR](docs/cgcr.md).
 It is not a dual-executor system: Claude Code must not implement or repair code
 directly in CGCR.
 CGCR is intended for a tmux layout: one pane/window runs Codex `/goal`, and a
@@ -28,13 +29,13 @@ separate pane/window runs Claude Code monitoring that Codex pane.
 Simplified startup:
 
 ```text
-/flow:humanize-cgcr <your long task prompt>
+/humanize:cgcr <your long task prompt>
 ```
 
-Run that from Codex, not Claude Code. It creates the two tmux windows and a
+In Codex startup context, `/humanize:cgcr` delegates to
+`/flow:humanize-cgcr`. That flow creates the two tmux windows and a
 `.humanize/cgcr/<run-id>/` resource directory, then injects the prepared Codex
-goal and Claude monitor prompts. If your Codex client exposes a
-`/humanize:cgcr` alias, it should delegate to this Codex flow.
+goal and Claude monitor prompts.
 
 ## Core Concepts
 
@@ -111,7 +112,8 @@ Requires [codex CLI](https://github.com/openai/codex) for review. See the full [
 ## Documentation
 
 - [Usage Guide](docs/usage.md) -- Commands, options, environment variables
-- [Codex Goal with Claude Review](docs/codex-goal-claude-review.md) -- Optional CGCR workflow
+- [CGCR](docs/cgcr.md) -- Canonical Codex Goal with Claude Review workflow
+- [Codex Goal with Claude Review](docs/codex-goal-claude-review.md) -- Long-form CGCR workflow notes
 - [Install for Claude Code](docs/install-for-claude.md) -- Full installation instructions
 - [Install for Codex](docs/install-for-codex.md) -- Codex skill runtime setup
 - [Install for Kimi](docs/install-for-kimi.md) -- Kimi CLI skill setup

@@ -59,9 +59,10 @@ CGCR is optional and does not replace RLCR:
 - CGCR is not a dual-executor system; reject any design that requires Claude
   Code to mutate the repo or repair code directly.
 
-Use `humanize-codex-goal` on the Codex side and
-`/flow:humanize-cgcr` when you want Codex to start the two-tmux topology.
-Use `/humanize:monitor-codex-goal` only on the Claude side.
+Use `/humanize:cgcr` as the public CGCR command name. It delegates to
+`/flow:humanize-cgcr` for Codex-side two-tmux startup and to the lower-level
+`/humanize:monitor-codex-goal` monitor behavior on the Claude side. Use
+`humanize-codex-goal` as the Codex execution contract.
 
 ### 3. Generate Plan - Structured Plan from Draft
 

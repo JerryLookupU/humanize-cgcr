@@ -90,6 +90,7 @@ TEST_SUITES=(
     "test-disable-nested-codex-hooks.sh"
     "test-cgcr-workflow.sh"
     "test-cgcr-setup.sh"
+    "test-cgcr-steer-hook.sh"
     # Session ID and Agent Teams tests
     "test-session-id.sh"
     "test-agent-teams.sh"

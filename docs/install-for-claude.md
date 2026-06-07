@@ -54,14 +54,15 @@ After installing, you should see Humanize commands available:
 /humanize:gen-plan
 /humanize:refine-plan
 /humanize:ask-codex
+/humanize:cgcr
 /humanize:monitor-codex-goal
 ```
 
-`/humanize:monitor-codex-goal` is optional and belongs to CGCR: Codex `/goal`
-implements while Claude Code monitors as a read-only reviewer. It is not RLCR.
-Run it in Claude Code, not in Codex. The Codex side uses `/goal` or
-`/flow:humanize-codex-goal`. The Codex-side launcher for the two-tmux topology
-is `/flow:humanize-cgcr`; it is not a Claude Code command.
+`/humanize:cgcr` is the public CGCR command name. The lower-level
+`/humanize:monitor-codex-goal` command belongs to the same workflow: Codex
+`/goal` implements while Claude Code monitors as a read-only reviewer. CGCR is
+not RLCR. The Codex side uses `/goal`, `/flow:humanize-codex-goal`, or
+`/flow:humanize-cgcr` for the two-tmux topology.
 
 ## Monitor Setup (Optional)
 
@@ -83,12 +84,12 @@ humanize monitor rlcr   # Monitor RLCR loop
 CGCR reverses the RLCR roles:
 
 - RLCR: `/humanize:start-rlcr-loop` means Claude Code implements and Codex reviews.
-- CGCR: `/humanize:monitor-codex-goal` means Codex `/goal` implements and Claude Code reviews.
+- CGCR: `/humanize:cgcr` means Codex `/goal` implements and Claude Code reviews.
 
 Recommended first monitor run:
 
 ```text
-/humanize:monitor-codex-goal --discover --notify-only
+/humanize:cgcr --discover --notify-only
 ```
 
 For the simpler end-to-end startup, install Humanize for Codex and run
@@ -96,7 +97,7 @@ For the simpler end-to-end startup, install Humanize for Codex and run
 Codex and Claude monitor tmux windows and prepares both prompts.
 
 The Claude monitor must stay read-only except for gated `[MONITOR]` tmux
-injection. See [Codex Goal with Claude Review](codex-goal-claude-review.md).
+injection. See [CGCR](cgcr.md).
 
 ## Other Install Guides
 

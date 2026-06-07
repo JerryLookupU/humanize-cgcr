@@ -181,7 +181,7 @@ At the end, emit [GOAL-CLOSEOUT] with outcome, files_changed, commits,
 commands_run, tests_or_verification, known_risks, and followups.
 EOF
 
-MONITOR_COMMAND="/humanize:monitor-codex-goal --discover --expect-goal $GOAL_ID --cadence $CADENCE --budget 0.1 --principles $(shell_quote "$PRINCIPLES")"
+MONITOR_COMMAND="/humanize:cgcr --discover --expect-goal $GOAL_ID --cadence $CADENCE --budget 0.1 --principles $(shell_quote "$PRINCIPLES")"
 if [[ "$NOTIFY_ONLY" == "true" ]]; then
     MONITOR_COMMAND="$MONITOR_COMMAND --notify-only"
 fi

@@ -32,6 +32,9 @@ This will:
 - Use RLCR defaults: `codex exec` with `gpt-5.5:high`, `codex review` with `gpt-5.5:high`
 - Install the optional CGCR Codex-side goal contract skill, `humanize-codex-goal`
 - Install the optional CGCR Codex-side launcher flow, `humanize-cgcr`
+- Copy Claude-side `monitor-codex-goal` functionality into the Humanize runtime
+  bundle when available so the launcher can start Claude with the plugin
+  surface; it is not installed as a Codex executor skill
 
 Requires Codex CLI `0.114.0` or newer for native hooks. Older Codex builds are not supported by the Codex install path.
 
@@ -102,12 +105,22 @@ Expected:
 workflow Codex `/goal` implements and a separate Claude Code session monitors
 with `/humanize:monitor-codex-goal`.
 
+Installer semantics:
+
+- `humanize-codex-goal` is installed for the Codex skill runtime.
+- `humanize-cgcr` is installed for the Codex flow/runtime.
+- `monitor-codex-goal` is Claude-side monitor functionality.
+- `monitor-codex-goal` may be copied into the Humanize runtime bundle or Claude
+  plugin surface for the CGCR launcher.
+- monitor-codex-goal should not be treated as a Codex executor skill.
+
 Command distinction:
 
 - In Codex, use `/goal` or `/flow:humanize-codex-goal`.
 - In Codex, use `/flow:humanize-cgcr <long task prompt>` to create the
   two-tmux topology and prepared prompts automatically.
-- In Claude Code, use `/humanize:monitor-codex-goal`.
+- Use `/humanize:cgcr` as the public CGCR command name. The lower-level Claude
+  monitor command remains `/humanize:monitor-codex-goal`.
 
 CGCR is additive. It does not replace the RLCR `humanize-rlcr` hook-managed
 workflow.

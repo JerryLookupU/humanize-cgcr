@@ -39,7 +39,7 @@ else
 fi
 
 assert_contains "$CGCR_SKILL" "/flow:humanize-cgcr" "cgcr skill documents Codex flow command"
-assert_contains "$CGCR_SKILL" 'Do not implement `/humanize:cgcr` as a Claude Code command.' "cgcr skill rejects Claude command wrapper"
+assert_contains "$CGCR_SKILL" '`/humanize:cgcr` is the public CGCR command name.' "cgcr skill documents canonical command wrapper"
 assert_contains "$CGCR_SKILL" "setup-cgcr.sh" "cgcr skill calls setup script"
 assert_contains "$CGCR_SKILL" "Codex is the only implementation agent" "cgcr skill preserves executor boundary"
 
@@ -96,7 +96,7 @@ assert_contains "$PROMPT_FILE" "/goal $TASK" "Codex prompt starts /goal"
 assert_contains "$PROMPT_FILE" "MONITOR_TARGET_ID: cgcr-test-goal" "Codex prompt includes goal id"
 assert_contains "$PROMPT_FILE" "If a message starts with [MONITOR], reply with [MONITOR-ACK] before acting." "Codex prompt includes monitor ack contract"
 assert_contains "$PROMPT_FILE" "Never claim tests passed unless the exact commands were run." "Codex prompt forbids fake verification"
-assert_contains "$MONITOR_FILE" "/humanize:monitor-codex-goal --discover --expect-goal cgcr-test-goal" "Monitor command discovers expected goal"
+assert_contains "$MONITOR_FILE" "/humanize:cgcr --discover --expect-goal cgcr-test-goal" "Monitor command discovers expected goal through canonical wrapper"
 assert_contains "$MONITOR_FILE" "--cadence 30m" "Monitor command includes cadence"
 assert_contains "$MONITOR_FILE" "--principles" "Monitor command includes principles"
 assert_contains "$RESOURCE_FILE" '"workflow": "CGCR"' "resources record workflow"

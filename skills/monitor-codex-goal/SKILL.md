@@ -25,6 +25,7 @@ allowed-tools:
   - "Bash(tmux display-message:*)"
   - "Bash(tmux has-session:*)"
   - "Bash(tmux send-keys:*)"
+  - "Bash(${CLAUDE_PLUGIN_ROOT}/hooks/cgcr-steer-prompt-hook.sh:*)"
   - "Bash(date:*)"
   - "AskUserQuestion"
   - "CronCreate"
@@ -305,7 +306,8 @@ Automatic injection is allowed only when all conditions are true:
    - fake/stub/TODO-only implementation
    - explicit violation of a user principle
 5. Confidence is high.
-6. The correction is narrow and does not broaden scope.
+6. The correction is focused on recovering the current goal and does not broaden
+   scope.
 7. Less than one injection has happened in this tick.
 8. Cooldown permits it.
 9. Budget permits it.
@@ -331,11 +333,64 @@ Approval is always required for:
 - anything where the monitor is not sure
 - anything based on evidence conflict between read-only inspections or subagents
 
+## Steer Prompt Hook
+
+When a tick produces `INJECT_DRAFT` or an automatic injection candidate, build
+the `[MONITOR]` prompt through the Claude hook helper:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/hooks/cgcr-steer-prompt-hook.sh" \
+  --goal-id "<MONITOR_TARGET_ID>" \
+  --transcript "<codex-transcript-path>" \
+  --mode "approved|auto" \
+  --reason "<one-line reason>" \
+  --deviation-class "<scope_drift|fabricated_data|fake_stub|project_invariant_break|execution_boundary>" \
+  --original-goal "<freshly reconstructed original goal>" \
+  --latest-user-constraints "<freshly reconstructed constraints>" \
+  --current-codex-direction "<what Codex is doing now>" \
+  --observed-deviation "<specific mismatch>" \
+  --evidence "<fresh transcript/git/tmux evidence>"
+```
+
+The hook is read-only and only prints the proposed prompt. It must not inspect
+or mutate repository state by itself, and it must not inject into tmux.
+
+Before calling the hook, reconstruct these fields from fresh evidence:
+
+- `original_goal`
+- `latest_user_constraints`
+- `current_codex_direction`
+- `observed_deviation`
+
+If the original goal or latest user constraints cannot be reconstructed from
+fresh evidence, do not inject. Produce `NOTIFY` and ask the user to confirm.
+
+The hook selects one of four steer prompt shapes using the prior same-goal
+correction count modulo 4. Derive that count from the current Codex transcript
+for the same `MONITOR_TARGET_ID`; do not rely on persistent memory. If the count
+cannot be reconstructed, use the first prompt shape or produce `NOTIFY` instead
+of guessing.
+
+Selector behavior:
+
+- `count % 4 == 0`: simple guidance back to the original goal.
+- `count % 4 == 1`: explicit realignment with cited mismatch.
+- `count % 4 == 2`: stop the tangent and classify work as in-scope,
+  out-of-scope, or requiring user confirmation.
+- `count % 4 == 3`: Occam review; identify the simplest sufficient path and
+  prune unnecessary work.
+
+Do not include the internal selector, level, or correction count in the injected
+prompt. The selected prompt records itself in the Codex transcript when it is
+injected, so later ticks can recompute the next shape from fresh transcript
+evidence.
+
 ## Injection Protocol
 
 Use `tmux send-keys` safely:
 
-1. Build the monitor prompt from fresh inspection only.
+1. Build the monitor prompt from fresh inspection only, using the steer prompt
+   hook above for any drift-correction prompt.
 2. Use `tmux send-keys -l` to type it without Enter.
 3. Capture the pane and verify the exact text landed in the Codex input area.
 4. Only then send Enter.
@@ -361,7 +416,8 @@ required_response:
 `required_response` must instruct Codex to reply with `[MONITOR-ACK]` before
 acting.
 
-Short steering prompt shape, compatible with other monitor implementations:
+Legacy short steering prompt shape, compatible with other monitor
+implementations only when the hook is unavailable:
 
 ```text
 [monitor-codex-goal]
