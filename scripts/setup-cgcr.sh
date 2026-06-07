@@ -140,6 +140,12 @@ BRANCH="$(git -C "$PROJECT_ROOT" branch --show-current 2>/dev/null || true)"
 
 CODEX_TARGET="${SESSION_NAME}:codex-goal.0"
 CLAUDE_TARGET="${SESSION_NAME}:claude-monitor.0"
+CODEX_START_COMMAND="codex --yolo \"\$(cat $(shell_quote "$CODEX_PROMPT_FILE"))\""
+if [[ -f "$RUNTIME_ROOT/commands/monitor-codex-goal.md" ]]; then
+    CLAUDE_START_COMMAND="claude --dangerously-skip-permissions --plugin-dir $(shell_quote "$RUNTIME_ROOT")"
+else
+    CLAUDE_START_COMMAND="claude --dangerously-skip-permissions"
+fi
 
 cat > "$TASK_FILE" <<EOF
 # CGCR Task
@@ -196,6 +202,8 @@ cat > "$README_FILE" <<EOF
 - tmux_session: $SESSION_NAME
 - codex_target: $CODEX_TARGET
 - claude_monitor_target: $CLAUDE_TARGET
+- codex_start_command: $CODEX_START_COMMAND
+- claude_start_command: $CLAUDE_START_COMMAND
 - task_file: $TASK_FILE
 - codex_prompt_file: $CODEX_PROMPT_FILE
 - monitor_command_file: $MONITOR_COMMAND_FILE
@@ -223,8 +231,10 @@ write_resource_file() {
   "tmux_session": "$(json_escape "$SESSION_NAME")",
   "codex_target": "$(json_escape "$CODEX_TARGET")",
   "codex_pane_id": "$(json_escape "$codex_pane_id")",
+  "codex_start_command": "$(json_escape "$CODEX_START_COMMAND")",
   "claude_monitor_target": "$(json_escape "$CLAUDE_TARGET")",
   "claude_monitor_pane_id": "$(json_escape "$claude_pane_id")",
+  "claude_start_command": "$(json_escape "$CLAUDE_START_COMMAND")",
   "task_file": "$(json_escape "$TASK_FILE")",
   "codex_prompt_file": "$(json_escape "$CODEX_PROMPT_FILE")",
   "monitor_command_file": "$(json_escape "$MONITOR_COMMAND_FILE")",
@@ -263,27 +273,16 @@ CODEX_PANE_ID="$(tmux display-message -p -t "$CODEX_TARGET" '#{pane_id}')"
 CLAUDE_PANE_ID="$(tmux display-message -p -t "$CLAUDE_TARGET" '#{pane_id}')"
 write_resource_file "$CODEX_PANE_ID" "$CLAUDE_PANE_ID"
 
-tmux send-keys -t "$CODEX_TARGET" -l "codex"
-tmux send-keys -t "$CODEX_TARGET" C-m
-
-if [[ -f "$RUNTIME_ROOT/commands/monitor-codex-goal.md" ]]; then
-    CLAUDE_START_COMMAND="claude --plugin-dir $(shell_quote "$RUNTIME_ROOT")"
-else
-    CLAUDE_START_COMMAND="claude"
-fi
+tmux send-keys -t "$CODEX_TARGET" -l "$CODEX_START_COMMAND"
+tmux send-keys -t "$CODEX_TARGET" Enter
 
 tmux send-keys -t "$CLAUDE_TARGET" -l "$CLAUDE_START_COMMAND"
-tmux send-keys -t "$CLAUDE_TARGET" C-m
+tmux send-keys -t "$CLAUDE_TARGET" Enter
 
 sleep "$START_DELAY"
 
-tmux load-buffer -b humanize-cgcr-codex "$CODEX_PROMPT_FILE"
-tmux paste-buffer -t "$CODEX_TARGET" -b humanize-cgcr-codex
-tmux send-keys -t "$CODEX_TARGET" C-m
-
-tmux load-buffer -b humanize-cgcr-monitor "$MONITOR_COMMAND_FILE"
-tmux paste-buffer -t "$CLAUDE_TARGET" -b humanize-cgcr-monitor
-tmux send-keys -t "$CLAUDE_TARGET" C-m
+tmux send-keys -t "$CLAUDE_TARGET" -l "$MONITOR_COMMAND"
+tmux send-keys -t "$CLAUDE_TARGET" Enter
 
 cat <<EOF
 CGCR started.

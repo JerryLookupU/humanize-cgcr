@@ -23,15 +23,19 @@ Or use the unified installer directly:
 ```
 
 This will:
-- Sync `humanize`, `humanize-gen-plan`, `humanize-refine-plan`, `humanize-rlcr`, `humanize-codex-goal`, and `humanize-cgcr` into `${CODEX_HOME:-~/.codex}/skills`
+- Sync the CGCR-only `humanize` runtime skill and the `humanize-cgcr` launcher
+  into `${CODEX_HOME:-~/.codex}/skills`
+- Remove stale Humanize Codex skills such as `humanize-gen-plan`,
+  `humanize-refine-plan`, `humanize-rlcr`, and `humanize-codex-goal` when they
+  were installed by an older Humanize setup
 - Copy runtime dependencies into `${CODEX_HOME:-~/.codex}/skills/humanize`
 - Install/update native Humanize Stop hooks in `${CODEX_HOME:-~/.codex}/hooks.json`
 - Enable the native Codex hooks feature (`hooks` on current Codex, `codex_hooks` on older builds) in `${CODEX_HOME:-~/.codex}/config.toml` when `codex` is available
 - Seed `~/.config/humanize/config.json` with a Codex/OpenAI `bitlesson_model` when that key is not already set
 - Mark the install as `provider_mode: "codex-only"` when using `--target codex`
-- Use RLCR defaults: `codex exec` with `gpt-5.5:high`, `codex review` with `gpt-5.5:high`
-- Install the optional CGCR Codex-side goal contract skill, `humanize-codex-goal`
-- Install the optional CGCR Codex-side launcher flow, `humanize-cgcr`
+- Install the CGCR Codex-side launcher skill, `humanize-cgcr`
+- Register the local `flow@humanize-local` Codex plugin so slash commands such
+  as `/flow:humanize-cgcr` appear in Codex after restart
 - Copy Claude-side `monitor-codex-goal` functionality into the Humanize runtime
   bundle when available so the launcher can start Claude with the plugin
   surface; it is not installed as a Codex executor skill
@@ -46,10 +50,6 @@ ls -la "${CODEX_HOME:-$HOME/.codex}/skills"
 
 Expected directories:
 - `humanize`
-- `humanize-gen-plan`
-- `humanize-refine-plan`
-- `humanize-rlcr`
-- `humanize-codex-goal`
 - `humanize-cgcr`
 
 Runtime dependencies in `humanize/`:
@@ -64,10 +64,6 @@ Runtime dependencies in `humanize/`:
 
 Installed files/directories:
 - `${CODEX_HOME:-~/.codex}/skills/humanize/SKILL.md`
-- `${CODEX_HOME:-~/.codex}/skills/humanize-gen-plan/SKILL.md`
-- `${CODEX_HOME:-~/.codex}/skills/humanize-refine-plan/SKILL.md`
-- `${CODEX_HOME:-~/.codex}/skills/humanize-rlcr/SKILL.md`
-- `${CODEX_HOME:-~/.codex}/skills/humanize-codex-goal/SKILL.md`
 - `${CODEX_HOME:-~/.codex}/skills/humanize-cgcr/SKILL.md`
 - `${CODEX_HOME:-~/.codex}/skills/humanize/scripts/`
 - `${CODEX_HOME:-~/.codex}/skills/humanize/hooks/`
@@ -77,6 +73,7 @@ Installed files/directories:
 - `${CODEX_HOME:-~/.codex}/skills/humanize/agents/`
 - `${CODEX_HOME:-~/.codex}/skills/humanize/commands/monitor-codex-goal.md`
 - `${CODEX_HOME:-~/.codex}/skills/humanize/skills/monitor-codex-goal/SKILL.md`
+- `${CODEX_HOME:-~/.codex}/marketplaces/humanize-local/plugins/flow/commands/humanize-cgcr.md`
 - `${CODEX_HOME:-~/.codex}/hooks.json`
 - `${XDG_CONFIG_HOME:-~/.config}/humanize/config.json` (created or updated only when Humanize config keys are unset)
 
@@ -85,13 +82,18 @@ Verify native hooks:
 ```bash
 codex features list | rg '^(hooks|codex_hooks)\s'
 sed -n '1,220p' "${CODEX_HOME:-$HOME/.codex}/hooks.json"
+codex plugin list | rg 'flow@humanize-local|humanize-local'
 ```
 
 Expected:
 - `hooks` or `codex_hooks` is `true`
 - `hooks.json` contains `loop-codex-stop-hook.sh`
+- `flow@humanize-local` is installed and enabled
 - `${XDG_CONFIG_HOME:-~/.config}/humanize/config.json` contains `bitlesson_model` set to a Codex/OpenAI model such as `gpt-5.5`
 - for `--target codex`, `${XDG_CONFIG_HOME:-~/.config}/humanize/config.json` also contains `provider_mode: "codex-only"`
+
+Restart Codex after install or update. Codex loads plugin slash commands when a
+new CLI session starts.
 
 ## Optional: Install for Both Codex and Kimi
 
@@ -99,31 +101,34 @@ Expected:
 ./scripts/install-skill.sh --target both
 ```
 
-## Optional: Codex Goal with Claude Review
+## Codex Goal with Claude Review
 
-`humanize-codex-goal` is the Codex-side execution contract for CGCR. In this
-workflow Codex `/goal` implements and a separate Claude Code session monitors
-with `/humanize:monitor-codex-goal`.
+CGCR is the active Codex install mode. Codex `/goal` implements and a separate
+Claude Code session monitors with `/humanize:monitor-codex-goal`.
 
 Installer semantics:
 
-- `humanize-codex-goal` is installed for the Codex skill runtime.
 - `humanize-cgcr` is installed for the Codex flow/runtime.
 - `monitor-codex-goal` is Claude-side monitor functionality.
 - `monitor-codex-goal` may be copied into the Humanize runtime bundle or Claude
   plugin surface for the CGCR launcher.
 - monitor-codex-goal should not be treated as a Codex executor skill.
+- Older RLCR and `humanize-codex-goal` entrypoint skills are intentionally
+  removed from this CGCR-only Codex install.
 
 Command distinction:
 
-- In Codex, use `/goal` or `/flow:humanize-codex-goal`.
 - In Codex, use `/flow:humanize-cgcr <long task prompt>` to create the
   two-tmux topology and prepared prompts automatically.
 - Use `/humanize:cgcr` as the public CGCR command name. The lower-level Claude
   monitor command remains `/humanize:monitor-codex-goal`.
 
-CGCR is additive. It does not replace the RLCR `humanize-rlcr` hook-managed
-workflow.
+`/flow:*` is not a Codex built-in namespace. The Codex installer registers it
+through the local `flow@humanize-local` plugin under
+`${CODEX_HOME:-~/.codex}/marketplaces/humanize-local`.
+
+This Codex install is CGCR-only. Do not expect RLCR slash commands or the old
+`humanize-codex-goal` flow to be present after reinstall.
 
 ## Useful Options
 

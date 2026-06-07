@@ -119,9 +119,50 @@ by `count % 4`:
 - Occam review: identify the simplest sufficient path and prune unnecessary
   work.
 
-The internal selector is not written into the injected prompt. The hook only
-prints the prompt; the monitor still owns approval, tmux capture verification,
-and injection.
+The cycle is intentionally transcript-derived. Claude does not need persistent
+memory to know which shape comes next; it recomputes the count from the current
+Codex transcript each tick. If the count cannot be reconstructed, Claude uses
+the simple guidance shape or produces `NOTIFY` instead of guessing.
+
+The internal selector, count, and level are not written into the injected
+prompt. Codex only sees the corrective instruction, evidence, constraints, and
+required `[MONITOR-ACK]`.
+
+The hook only prints the prompt. The monitor still owns approval, tmux capture
+verification, and injection.
+
+Hook input:
+
+```bash
+hooks/cgcr-steer-prompt-hook.sh \
+  --goal-id "<MONITOR_TARGET_ID>" \
+  --transcript "<codex-transcript-path>" \
+  --mode "approved|auto" \
+  --reason "<one-line reason>" \
+  --deviation-class "<scope_drift|fabricated_data|fake_stub|project_invariant_break|execution_boundary>" \
+  --original-goal "<freshly reconstructed original goal>" \
+  --latest-user-constraints "<freshly reconstructed constraints>" \
+  --current-codex-direction "<what Codex is doing now>" \
+  --observed-deviation "<specific mismatch>" \
+  --evidence "<fresh transcript/git/tmux evidence>"
+```
+
+Steer shapes:
+
+| Selector | Shape | Use |
+|----------|-------|-----|
+| `count % 4 == 0` | Simple guidance | Codex likely needs a light nudge back to the goal. |
+| `count % 4 == 1` | Explicit realignment | The same goal is still drifting and needs a cited mismatch. |
+| `count % 4 == 2` | Stop and classify | Codex needs to stop the tangent and separate in-scope, out-of-scope, and uncertain work. |
+| `count % 4 == 3` | Occam review | Codex needs to prune branches and return to the simplest sufficient path. |
+
+The monitor must not use the hook to provide patches or become the executor.
+Every generated steer should keep Codex inside the current `/goal` and require:
+
+```text
+required_response:
+Reply with [MONITOR-ACK] before acting.
+```
 
 ## Failure Modes
 

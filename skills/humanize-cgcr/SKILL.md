@@ -100,8 +100,9 @@ user instead of silently following either side.
 The setup script creates:
 
 - a Humanize-owned resource directory under `.humanize/cgcr/<run-id>/`;
-- one tmux window named `codex-goal` running `codex`;
-- one tmux window named `claude-monitor` running `claude`;
+- one tmux window named `codex-goal` running `codex --yolo` with the generated
+  Codex prompt as the startup prompt;
+- one tmux window named `claude-monitor` running `claude --dangerously-skip-permissions`;
 - a prepared Codex `/goal` prompt with the CGCR monitor contract;
 - a prepared Claude monitor command using `/humanize:monitor-codex-goal`.
 
@@ -136,6 +137,21 @@ The run directory contains:
 Use `resources.json` as the local record of the `MONITOR_TARGET_ID`, tmux
 session name, Codex tmux target, Claude monitor tmux target, and prompt files.
 
+After the goal reaches terminal state, run the task-end resource recovery
+script instead of manually killing panes:
+
+```bash
+"{{HUMANIZE_RUNTIME_ROOT}}/scripts/cleanup-cgcr.sh" --session <tmux-session>
+```
+
+The cleanup script resolves `resources.json`, captures rollout evidence from
+both tmux panes, writes `rollout.md`, `closeout.md`, `cleanup.json`,
+`codex-pane-final.txt`, and `claude-monitor-final.txt`, verifies terminal
+markers, then releases the CGCR tmux session. Use `--run-dir <dir>` or
+`--resource-file <file>` when the session name is unavailable. Use `--force`
+only after the user explicitly confirms cleanup despite missing terminal
+markers.
+
 ## Examples
 
 ```text
@@ -148,10 +164,8 @@ session name, Codex tmux target, Claude monitor tmux target, and prompt files.
 
 ## Notes
 
-- Use `/flow:humanize-codex-goal` only when you want to run the execution
-  contract manually in an existing Codex `/goal` session.
 - Use `/humanize:cgcr` as the public CGCR name. The lower-level
   `/humanize:monitor-codex-goal` command remains available inside Claude Code in
   the separate monitor tmux window.
-- RLCR remains `/flow:humanize-rlcr` on Codex and
-  `/humanize:start-rlcr-loop` on Claude Code.
+- This CGCR-only install exposes `/flow:humanize-cgcr` as the Codex-side
+  launcher.

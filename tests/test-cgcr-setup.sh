@@ -10,6 +10,7 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 source "$SCRIPT_DIR/test-helpers.sh"
 
 SETUP_SCRIPT="$PROJECT_ROOT/scripts/setup-cgcr.sh"
+CLEANUP_SCRIPT="$PROJECT_ROOT/scripts/cleanup-cgcr.sh"
 CGCR_SKILL="$PROJECT_ROOT/skills/humanize-cgcr/SKILL.md"
 
 assert_contains() {
@@ -32,6 +33,18 @@ else
     fail "setup-cgcr.sh is executable" "executable" "missing or not executable"
 fi
 
+if [[ -x "$CLEANUP_SCRIPT" ]]; then
+    pass "cleanup-cgcr.sh is executable"
+else
+    fail "cleanup-cgcr.sh is executable" "executable" "missing or not executable"
+fi
+
+if bash -n "$CLEANUP_SCRIPT"; then
+    pass "cleanup-cgcr.sh has valid shell syntax"
+else
+    fail "cleanup-cgcr.sh has valid shell syntax" "bash -n passes" "syntax error"
+fi
+
 if [[ -f "$CGCR_SKILL" ]]; then
     pass "Codex cgcr launcher skill exists"
 else
@@ -41,7 +54,11 @@ fi
 assert_contains "$CGCR_SKILL" "/flow:humanize-cgcr" "cgcr skill documents Codex flow command"
 assert_contains "$CGCR_SKILL" '`/humanize:cgcr` is the public CGCR command name.' "cgcr skill documents canonical command wrapper"
 assert_contains "$CGCR_SKILL" "setup-cgcr.sh" "cgcr skill calls setup script"
+assert_contains "$CGCR_SKILL" "cleanup-cgcr.sh" "cgcr skill documents task-end cleanup script"
 assert_contains "$CGCR_SKILL" "Codex is the only implementation agent" "cgcr skill preserves executor boundary"
+assert_contains "$SETUP_SCRIPT" 'CODEX_START_COMMAND="codex --yolo' "cgcr launcher starts Codex in yolo mode"
+assert_contains "$SETUP_SCRIPT" '$(cat $(shell_quote "$CODEX_PROMPT_FILE"))' "cgcr launcher passes Codex prompt at startup"
+assert_contains "$SETUP_SCRIPT" "claude --dangerously-skip-permissions" "cgcr launcher starts Claude with active permission bypass flag"
 
 setup_test_dir
 REPO="$TEST_DIR/repo"
@@ -102,7 +119,9 @@ assert_contains "$MONITOR_FILE" "--principles" "Monitor command includes princip
 assert_contains "$RESOURCE_FILE" '"workflow": "CGCR"' "resources record workflow"
 assert_contains "$RESOURCE_FILE" '"tmux_session": "humanize-cgcr-test"' "resources record tmux session"
 assert_contains "$RESOURCE_FILE" '"codex_target": "humanize-cgcr-test:codex-goal.0"' "resources record Codex target"
+assert_contains "$RESOURCE_FILE" '"codex_start_command": "codex --yolo' "resources record Codex start command"
 assert_contains "$RESOURCE_FILE" '"claude_monitor_target": "humanize-cgcr-test:claude-monitor.0"' "resources record Claude monitor target"
+assert_contains "$RESOURCE_FILE" '"claude_start_command": "claude --dangerously-skip-permissions' "resources record Claude start command"
 assert_contains "$README_FILE" "Do not implement from Claude Code." "run README preserves monitor boundary"
 
 print_test_summary "CGCR Setup Tests"
