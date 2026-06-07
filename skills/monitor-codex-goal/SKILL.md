@@ -341,6 +341,7 @@ the `[MONITOR]` prompt through the Claude hook helper:
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/hooks/cgcr-steer-prompt-hook.sh" \
   --goal-id "<MONITOR_TARGET_ID>" \
+  --drift-status "drift|clean" \
   --transcript "<codex-transcript-path>" \
   --mode "approved|auto" \
   --reason "<one-line reason>" \
@@ -365,19 +366,30 @@ Before calling the hook, reconstruct these fields from fresh evidence:
 If the original goal or latest user constraints cannot be reconstructed from
 fresh evidence, do not inject. Produce `NOTIFY` and ask the user to confirm.
 
-The hook selects one of four steer prompt shapes using the prior same-goal
-correction count modulo 4. Derive that count from the current Codex transcript
-for the same `MONITOR_TARGET_ID`; do not rely on persistent memory. If the count
-cannot be reconstructed, use the first prompt shape or produce `NOTIFY` instead
-of guessing.
+Phased correction is gated by the current monitor judgment:
+
+1. Judge whether Codex is drifting from the original goal or current user
+   constraints.
+2. If no drift is found, continue normal monitoring and reset the same-goal
+   correction count to 0. Do not build or inject a steer prompt.
+3. If drift is found, increment the prior same-goal correction count by 1.
+4. Choose the base prompt from the current 1-based correction count.
+5. Construct a fresh steer prompt from current transcript/git/tmux evidence.
+6. Send it to Codex only after the normal approval and tmux injection gates
+   pass.
+
+Derive the prior count from the current Codex transcript for the same
+`MONITOR_TARGET_ID`; do not rely on persistent memory. If the count cannot be
+reconstructed, use the first prompt shape or produce `NOTIFY` instead of
+guessing.
 
 Selector behavior:
 
-- `count % 4 == 0`: simple guidance back to the original goal.
-- `count % 4 == 1`: explicit realignment with cited mismatch.
-- `count % 4 == 2`: stop the tangent and classify work as in-scope,
+- correction count `1, 5, 9, ...`: simple guidance back to the original goal.
+- correction count `2, 6, 10, ...`: explicit realignment with cited mismatch.
+- correction count `3, 7, 11, ...`: stop the tangent and classify work as in-scope,
   out-of-scope, or requiring user confirmation.
-- `count % 4 == 3`: Occam review; identify the simplest sufficient path and
+- correction count `4, 8, 12, ...`: Occam review; identify the simplest sufficient path and
   prune unnecessary work.
 
 Do not include the internal selector, level, or correction count in the injected

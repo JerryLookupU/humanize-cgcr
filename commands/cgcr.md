@@ -70,9 +70,11 @@ If any approach would require Claude Code to mutate the repository, reject it
 and route feedback through the monitor protocol.
 
 When Claude drafts a corrective steer prompt, use the CGCR steer prompt hook in
-`hooks/cgcr-steer-prompt-hook.sh`. The hook chooses the prompt shape from the
-same-goal correction count modulo 4 and prints the `[MONITOR]` prompt; it does
-not inject into tmux or mutate repository files.
+`hooks/cgcr-steer-prompt-hook.sh`. The monitor first judges whether Codex is
+drifting. If not, normal monitoring continues and the same-goal correction count
+resets to 0. If it is drifting, the prior same-goal correction count increments
+by 1, that current 1-based count selects the base prompt, and the hook prints
+the `[MONITOR]` prompt. It does not inject into tmux or mutate repository files.
 
 ## Required Behavior
 

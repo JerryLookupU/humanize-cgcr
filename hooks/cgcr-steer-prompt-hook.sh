@@ -10,6 +10,7 @@ set -euo pipefail
 
 MODE="approved"
 GOAL_ID=""
+DRIFT_STATUS="drift"
 CORRECTION_COUNT=""
 TRANSCRIPT_FILE=""
 REASON="scope drift detected"
@@ -30,7 +31,8 @@ Usage:
 Options:
   --goal-id ID                 MONITOR_TARGET_ID for the Codex goal
   --mode auto|approved         Prompt tag mode (default: approved)
-  --correction-count N         Prior same-goal steer count; selector is N % 4
+  --drift-status drift|clean   Whether the current tick found drift (default: drift)
+  --correction-count N         Prior same-goal drift-correction count
   --transcript PATH            Read-only transcript used to count prior steers
   --reason TEXT                One-line monitor reason
   --deviation-class TEXT       Deviation class, such as scope_drift
@@ -43,9 +45,14 @@ Options:
   --evidence TEXT              Evidence line; may be repeated
   -h, --help                   Show help
 
-If --correction-count is omitted and --transcript is supplied, the hook counts
-prior [MONITOR:auto] or [MONITOR:approved] prompts in that transcript with the
-same goal_id. If both are omitted, it uses 0.
+If --drift-status is clean, the hook does not produce a steer prompt and prints
+a RESET marker for the monitor to treat the correction count as 0.
+
+If --drift-status is drift, the hook increments the prior same-goal correction
+count by 1, then chooses the base prompt from that current count. If
+--correction-count is omitted and --transcript is supplied, the hook counts prior
+[MONITOR:auto] or [MONITOR:approved] prompts in that transcript with the same
+goal_id. If both are omitted, it uses 0.
 EOF
 }
 
@@ -228,6 +235,14 @@ while [[ $# -gt 0 ]]; do
             esac
             shift 2
             ;;
+        --drift-status)
+            [[ -n "${2:-}" ]] || die "--drift-status requires a value"
+            case "$2" in
+                drift|clean) DRIFT_STATUS="$2" ;;
+                *) die "--drift-status must be drift or clean" ;;
+            esac
+            shift 2
+            ;;
         --correction-count)
             [[ -n "${2:-}" ]] || die "--correction-count requires a value"
             validate_nonnegative_integer "$2"
@@ -286,6 +301,16 @@ done
 
 [[ -n "$GOAL_ID" ]] || die "--goal-id is required"
 
+if [[ "$DRIFT_STATUS" == "clean" ]]; then
+    cat <<EOF
+RESET:
+goal_id: $GOAL_ID
+correction_count: 0
+reason: no drift detected; continue normal monitoring
+EOF
+    exit 0
+fi
+
 if [[ -z "$CORRECTION_COUNT" ]]; then
     if [[ -n "$TRANSCRIPT_FILE" ]]; then
         CORRECTION_COUNT="$(count_prior_steers_from_transcript "$TRANSCRIPT_FILE" "$GOAL_ID")"
@@ -296,7 +321,10 @@ fi
 
 validate_nonnegative_integer "$CORRECTION_COUNT"
 
-case $((CORRECTION_COUNT % 4)) in
+CURRENT_CORRECTION_COUNT=$((CORRECTION_COUNT + 1))
+SELECTOR=$(((CURRENT_CORRECTION_COUNT - 1) % 4))
+
+case "$SELECTOR" in
     0) print_simple_guidance_prompt ;;
     1) print_explicit_realignment_prompt ;;
     2) print_stop_and_classify_prompt ;;

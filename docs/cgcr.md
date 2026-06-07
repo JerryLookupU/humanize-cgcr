@@ -107,10 +107,29 @@ steer shape. Before drafting a steer, Claude reconstructs the original goal,
 latest user constraints, current Codex direction, and observed deviation from
 fresh transcript/git/tmux evidence.
 
-Use `hooks/cgcr-steer-prompt-hook.sh` to build the steer prompt. The hook counts
-prior `[MONITOR:auto]` and `[MONITOR:approved]` prompts for the same
-`MONITOR_TARGET_ID` from the current transcript, then chooses the prompt shape
-by `count % 4`:
+Use `hooks/cgcr-steer-prompt-hook.sh` to build the steer prompt. The precondition
+for phased correction is a fresh monitor judgment that Codex is drifting.
+
+Tick flow:
+
+```text
+judge drift
+  -> no drift: continue normal monitoring and reset correction_count to 0
+  -> drift: correction_count = prior_same_goal_correction_count + 1
+            choose the base prompt from correction_count
+            construct a fresh steer prompt from current evidence
+            send it to Codex only after the monitor injection gate passes
+```
+
+The hook counts prior `[MONITOR:auto]` and `[MONITOR:approved]` prompts for the
+same `MONITOR_TARGET_ID` from the current transcript when no explicit prior
+count is supplied. When the current tick is clean, the monitor must not call the
+hook to build a steer, or must call it with `--drift-status clean` and treat the
+returned `RESET` marker as `correction_count = 0`.
+
+When the current tick is drifting, the hook increments the prior correction
+count by one and chooses the prompt shape from the current 1-based correction
+count:
 
 - simple guidance back to the original goal;
 - explicit realignment with the cited mismatch;
@@ -136,6 +155,7 @@ Hook input:
 ```bash
 hooks/cgcr-steer-prompt-hook.sh \
   --goal-id "<MONITOR_TARGET_ID>" \
+  --drift-status "drift|clean" \
   --transcript "<codex-transcript-path>" \
   --mode "approved|auto" \
   --reason "<one-line reason>" \
@@ -149,12 +169,12 @@ hooks/cgcr-steer-prompt-hook.sh \
 
 Steer shapes:
 
-| Selector | Shape | Use |
-|----------|-------|-----|
-| `count % 4 == 0` | Simple guidance | Codex likely needs a light nudge back to the goal. |
-| `count % 4 == 1` | Explicit realignment | The same goal is still drifting and needs a cited mismatch. |
-| `count % 4 == 2` | Stop and classify | Codex needs to stop the tangent and separate in-scope, out-of-scope, and uncertain work. |
-| `count % 4 == 3` | Occam review | Codex needs to prune branches and return to the simplest sufficient path. |
+| Correction Count | Shape | Use |
+|------------------|-------|-----|
+| `1, 5, 9, ...` | Simple guidance | Codex likely needs a light nudge back to the goal. |
+| `2, 6, 10, ...` | Explicit realignment | The same goal is still drifting and needs a cited mismatch. |
+| `3, 7, 11, ...` | Stop and classify | Codex needs to stop the tangent and separate in-scope, out-of-scope, and uncertain work. |
+| `4, 8, 12, ...` | Occam review | Codex needs to prune branches and return to the simplest sufficient path. |
 
 The monitor must not use the hook to provide patches or become the executor.
 Every generated steer should keep Codex inside the current `/goal` and require:

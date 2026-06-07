@@ -159,12 +159,19 @@ monitoring with `CronDelete` and the job id returned by `CronCreate`.
 
 ## Corrective Steer Shape
 
-When Claude detects repeated drift for the same `MONITOR_TARGET_ID`, it builds
-the corrective `[MONITOR]` prompt with `hooks/cgcr-steer-prompt-hook.sh`.
+When Claude detects drift for the same `MONITOR_TARGET_ID`, it builds the
+corrective `[MONITOR]` prompt with `hooks/cgcr-steer-prompt-hook.sh`.
+
+The precondition is explicit: first judge whether Codex is drifting. If not,
+Claude continues normal monitoring and resets the same-goal correction count to
+0. If Codex is drifting, Claude increments the prior same-goal correction count
+by 1, chooses the base prompt from that current count, and constructs a fresh
+steer from current evidence.
 
 The hook is read-only. It counts prior same-goal `[MONITOR:auto]` and
-`[MONITOR:approved]` prompts from the current transcript and chooses one of four
-prompt shapes by `count % 4`:
+`[MONITOR:approved]` prompts from the current transcript when no explicit prior
+count is supplied. The current 1-based correction count chooses one of four
+prompt shapes:
 
 1. simple guidance back to the original goal;
 2. explicit realignment with the cited mismatch;
