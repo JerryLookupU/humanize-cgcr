@@ -17,25 +17,113 @@ Humanize also supports an optional reverse workflow, **CGCR** (Codex Goal with C
 - `/humanize:start-rlcr-loop` = Claude Code implements, Codex reviews
 - `/humanize:cgcr` = public CGCR command wrapper
 - `/humanize:monitor-codex-goal` in Claude Code = lower-level monitor command
-- `/goal` or `/flow:humanize-codex-goal` in Codex = execute the CGCR goal
-- `/flow:humanize-cgcr` in Codex = start the two-tmux CGCR topology
+- `/goal` or the CGCR goal contract in Codex = execute the CGCR goal
+- `$humanize-cgcr` in the Codex terminal = start the two-tmux CGCR topology
+- `/flow:humanize-cgcr` = lower-level Codex flow shim used by the launcher
 
 CGCR is additive and does not replace RLCR. See [CGCR](docs/cgcr.md).
 It is not a dual-executor system: Claude Code must not implement or repair code
 directly in CGCR.
-CGCR is intended for a tmux layout: one pane/window runs Codex `/goal`, and a
-separate pane/window runs Claude Code monitoring that Codex pane.
 
-Simplified startup:
+### Install CGCR For Codex
 
-```text
-/humanize:cgcr <your long task prompt>
+CGCR needs `codex`, `claude`, and `tmux` available on PATH. Install the Codex
+runtime from this repository:
+
+```bash
+./scripts/install-skills-codex.sh
 ```
 
-In Codex startup context, `/humanize:cgcr` delegates to
-`/flow:humanize-cgcr`. That flow creates the two tmux windows and a
-`.humanize/cgcr/<run-id>/` resource directory, then injects the prepared Codex
-goal and Claude monitor prompts.
+Or install from a fresh clone:
+
+```bash
+tmp_dir="$(mktemp -d)" && git clone --depth 1 https://github.com/PolyArch/humanize.git "$tmp_dir/humanize" && "$tmp_dir/humanize/scripts/install-skills-codex.sh"
+```
+
+Then restart Codex. The installer registers the local `flow@humanize-local`
+plugin and the `$humanize-cgcr` Codex terminal command. Codex loads local
+commands only when a new CLI session starts.
+
+Verify:
+
+```bash
+ls -la "${CODEX_HOME:-$HOME/.codex}/skills/humanize"
+ls -la "${CODEX_HOME:-$HOME/.codex}/skills/humanize-cgcr"
+codex plugin list | rg 'flow@humanize-local|humanize-local'
+```
+
+### Use CGCR
+
+Open Codex in the target repository. In the **Codex terminal input**, type:
+
+```text
+$humanize-cgcr <your long task prompt>
+```
+
+Recommended long task prompt format:
+
+```text
+Task:
+Describe the concrete outcome Codex should deliver.
+
+Tools and skills:
+Name required local tools, commands, skills, docs, or services Codex should use.
+
+Key flow:
+List the important investigation, implementation, verification, and handoff
+steps that must happen in order.
+
+Constraints and stop conditions:
+State scope boundaries, forbidden changes, approval points, and when Codex
+should stop, ask, or emit closeout instead of continuing.
+
+Notes:
+Add repo-specific paths, environment details, known risks, and anything the
+Claude monitor should pay attention to.
+```
+
+Do not type this inside tmux. This command is the launcher: it creates the tmux
+session for you, starts Codex and Claude in separate tmux windows, and submits
+the prepared prompts automatically.
+
+If the Codex terminal command is not available, restart Codex after install.
+For manual fallback, use the installed launcher directly:
+
+```text
+"${CODEX_HOME:-$HOME/.codex}/skills/humanize/scripts/setup-cgcr.sh" --task "<your long task prompt>"
+```
+
+In Codex startup context, `$humanize-cgcr` delegates to the installed
+`humanize-cgcr` launcher flow. The launcher creates a tmux session with two
+windows and a `.humanize/cgcr/<run-id>/` resource directory:
+
+- `codex-goal` runs a generated `start-codex.sh` launcher, which starts Codex
+  with the prepared `/goal` prompt.
+- `claude-monitor` runs a generated `start-claude.sh` launcher, then starts the
+  Claude monitor command.
+- `resources.json` records the tmux session, pane targets, launcher files, and
+  prompt files.
+
+The command output includes the tmux session name. Attach to inspect the run:
+
+```bash
+tmux attach -t <tmux-session>
+```
+
+Inside tmux there are two windows: `codex-goal` and `claude-monitor`. Press
+`Ctrl-b` then `n` for next window, `p` for previous window, `0` or `1` for a
+numbered window, or `w` for the window list.
+
+When the goal is complete, clean up the CGCR tmux session through the run
+resource cleanup path:
+
+```bash
+"${CODEX_HOME:-$HOME/.codex}/skills/humanize/scripts/cleanup-cgcr.sh" --session <tmux-session>
+```
+
+For advanced options such as `--goal-id`, `--session`, `--cadence`,
+`--principles`, and `--notify-only`, see [Install for Codex](docs/install-for-codex.md)
+and [CGCR](docs/cgcr.md).
 
 ## Core Concepts
 
