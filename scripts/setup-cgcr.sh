@@ -20,7 +20,8 @@ CADENCE="30m"
 PRINCIPLES="no fake data; no placeholder stubs; no fabricated results; do not broaden scope"
 NOTIFY_ONLY="false"
 PREPARE_ONLY="false"
-START_DELAY="${HUMANIZE_CGCR_START_DELAY:-3}"
+START_DELAY="${HUMANIZE_CGCR_START_DELAY:-0}"
+START_TIMEOUT="${HUMANIZE_CGCR_START_TIMEOUT:-45}"
 
 usage() {
     cat <<'EOF'
@@ -65,6 +66,63 @@ json_escape() {
 
 shell_quote() {
     printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
+
+wait_for_pane_text() {
+    local target="$1"
+    local needle="$2"
+    local timeout="$3"
+    local desc="$4"
+    local elapsed=0
+
+    while (( elapsed < timeout )); do
+        if tmux capture-pane -t "$target" -p -S -120 2>/dev/null | grep -qF -- "$needle"; then
+            return 0
+        fi
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+
+    die "timed out after ${timeout}s waiting for $desc in $target"
+}
+
+wait_for_pane_any_text() {
+    local target="$1"
+    local timeout="$2"
+    local desc="$3"
+    shift 3
+    local elapsed=0
+    local pane_text
+    local needle
+
+    while (( elapsed < timeout )); do
+        pane_text="$(tmux capture-pane -t "$target" -p -S -120 2>/dev/null || true)"
+        for needle in "$@"; do
+            if grep -qF -- "$needle" <<<"$pane_text"; then
+                return 0
+            fi
+        done
+        sleep 1
+        elapsed=$((elapsed + 1))
+    done
+
+    log "timed out after ${timeout}s waiting for $desc in $target"
+    return 1
+}
+
+tmux_paste_literal() {
+    local target="$1"
+    local text="$2"
+    local safe_target="${target//[^A-Za-z0-9_.-]/-}"
+    local buffer_name="humanize-cgcr-$$-${safe_target}"
+
+    tmux set-buffer -b "$buffer_name" -- "$text"
+    tmux paste-buffer -d -b "$buffer_name" -t "$target"
+}
+
+tmux_submit() {
+    local target="$1"
+    tmux send-keys -t "$target" C-m
 }
 
 while [[ $# -gt 0 ]]; do
@@ -113,6 +171,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$TASK_TEXT" ]] || { usage; die "--task is required"; }
+if ! [[ "$START_TIMEOUT" =~ ^[0-9]+$ ]]; then
+    die "HUMANIZE_CGCR_START_TIMEOUT must be an integer number of seconds"
+fi
 
 TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 TASK_SLUG="$(slugify "$TASK_TEXT")"
@@ -130,6 +191,8 @@ RUN_DIR="$PROJECT_ROOT/.humanize/cgcr/${TIMESTAMP}-${TASK_SLUG}"
 TASK_FILE="$RUN_DIR/task.md"
 CODEX_PROMPT_FILE="$RUN_DIR/codex-goal-prompt.md"
 MONITOR_COMMAND_FILE="$RUN_DIR/claude-monitor-command.txt"
+CODEX_LAUNCHER_FILE="$RUN_DIR/start-codex.sh"
+CLAUDE_LAUNCHER_FILE="$RUN_DIR/start-claude.sh"
 RESOURCE_FILE="$RUN_DIR/resources.json"
 README_FILE="$RUN_DIR/README.md"
 
@@ -140,12 +203,14 @@ BRANCH="$(git -C "$PROJECT_ROOT" branch --show-current 2>/dev/null || true)"
 
 CODEX_TARGET="${SESSION_NAME}:codex-goal.0"
 CLAUDE_TARGET="${SESSION_NAME}:claude-monitor.0"
-CODEX_START_COMMAND="codex --yolo \"\$(cat $(shell_quote "$CODEX_PROMPT_FILE"))\""
+CODEX_CLI_COMMAND="codex --yolo \"\$(cat $(shell_quote "$CODEX_PROMPT_FILE"))\""
+CODEX_START_COMMAND="$(shell_quote "$CODEX_LAUNCHER_FILE")"
 if [[ -f "$RUNTIME_ROOT/commands/monitor-codex-goal.md" ]]; then
     CLAUDE_START_COMMAND="claude --dangerously-skip-permissions --plugin-dir $(shell_quote "$RUNTIME_ROOT")"
 else
     CLAUDE_START_COMMAND="claude --dangerously-skip-permissions"
 fi
+CLAUDE_WINDOW_COMMAND="$(shell_quote "$CLAUDE_LAUNCHER_FILE")"
 
 cat > "$TASK_FILE" <<EOF
 # CGCR Task
@@ -193,6 +258,21 @@ if [[ "$NOTIFY_ONLY" == "true" ]]; then
 fi
 printf '%s\n' "$MONITOR_COMMAND" > "$MONITOR_COMMAND_FILE"
 
+cat > "$CODEX_LAUNCHER_FILE" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+cd $(shell_quote "$PROJECT_ROOT")
+exec $CODEX_CLI_COMMAND
+EOF
+
+cat > "$CLAUDE_LAUNCHER_FILE" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+cd $(shell_quote "$PROJECT_ROOT")
+exec $CLAUDE_START_COMMAND
+EOF
+chmod +x "$CODEX_LAUNCHER_FILE" "$CLAUDE_LAUNCHER_FILE"
+
 cat > "$README_FILE" <<EOF
 # CGCR Run
 
@@ -203,10 +283,14 @@ cat > "$README_FILE" <<EOF
 - codex_target: $CODEX_TARGET
 - claude_monitor_target: $CLAUDE_TARGET
 - codex_start_command: $CODEX_START_COMMAND
+- codex_cli_command: $CODEX_CLI_COMMAND
 - claude_start_command: $CLAUDE_START_COMMAND
+- claude_window_command: $CLAUDE_WINDOW_COMMAND
 - task_file: $TASK_FILE
 - codex_prompt_file: $CODEX_PROMPT_FILE
 - monitor_command_file: $MONITOR_COMMAND_FILE
+- codex_launcher_file: $CODEX_LAUNCHER_FILE
+- claude_launcher_file: $CLAUDE_LAUNCHER_FILE
 
 Attach:
 
@@ -232,9 +316,13 @@ write_resource_file() {
   "codex_target": "$(json_escape "$CODEX_TARGET")",
   "codex_pane_id": "$(json_escape "$codex_pane_id")",
   "codex_start_command": "$(json_escape "$CODEX_START_COMMAND")",
+  "codex_cli_command": "$(json_escape "$CODEX_CLI_COMMAND")",
+  "codex_launcher_file": "$(json_escape "$CODEX_LAUNCHER_FILE")",
   "claude_monitor_target": "$(json_escape "$CLAUDE_TARGET")",
   "claude_monitor_pane_id": "$(json_escape "$claude_pane_id")",
   "claude_start_command": "$(json_escape "$CLAUDE_START_COMMAND")",
+  "claude_window_command": "$(json_escape "$CLAUDE_WINDOW_COMMAND")",
+  "claude_launcher_file": "$(json_escape "$CLAUDE_LAUNCHER_FILE")",
   "task_file": "$(json_escape "$TASK_FILE")",
   "codex_prompt_file": "$(json_escape "$CODEX_PROMPT_FILE")",
   "monitor_command_file": "$(json_escape "$MONITOR_COMMAND_FILE")",
@@ -273,16 +361,26 @@ CODEX_PANE_ID="$(tmux display-message -p -t "$CODEX_TARGET" '#{pane_id}')"
 CLAUDE_PANE_ID="$(tmux display-message -p -t "$CLAUDE_TARGET" '#{pane_id}')"
 write_resource_file "$CODEX_PANE_ID" "$CLAUDE_PANE_ID"
 
-tmux send-keys -t "$CODEX_TARGET" -l "$CODEX_START_COMMAND"
-tmux send-keys -t "$CODEX_TARGET" Enter
+tmux_paste_literal "$CODEX_TARGET" "$CODEX_START_COMMAND"
+tmux_submit "$CODEX_TARGET"
 
-tmux send-keys -t "$CLAUDE_TARGET" -l "$CLAUDE_START_COMMAND"
-tmux send-keys -t "$CLAUDE_TARGET" Enter
+tmux_paste_literal "$CLAUDE_TARGET" "$CLAUDE_WINDOW_COMMAND"
+tmux_submit "$CLAUDE_TARGET"
 
-sleep "$START_DELAY"
+if [[ "$START_DELAY" != "0" ]]; then
+    sleep "$START_DELAY"
+fi
+wait_for_pane_text "$CLAUDE_TARGET" "bypass permissions on" "$START_TIMEOUT" "Claude Code prompt readiness"
 
-tmux send-keys -t "$CLAUDE_TARGET" -l "$MONITOR_COMMAND"
-tmux send-keys -t "$CLAUDE_TARGET" Enter
+tmux_paste_literal "$CLAUDE_TARGET" "$MONITOR_COMMAND"
+wait_for_pane_text "$CLAUDE_TARGET" "$GOAL_ID" "$START_TIMEOUT" "rendered monitor command"
+tmux_submit "$CLAUDE_TARGET"
+if ! wait_for_pane_any_text "$CLAUDE_TARGET" 8 "Claude monitor command start" "esc to interrupt" "Skill(humanize:cgcr)" "Thought for" "Frosting"; then
+    log "monitor command did not visibly start after first submit; retrying monitor submit once"
+    tmux_submit "$CLAUDE_TARGET"
+    wait_for_pane_any_text "$CLAUDE_TARGET" "$START_TIMEOUT" "Claude monitor command start" "esc to interrupt" "Skill(humanize:cgcr)" "Thought for" "Frosting" \
+        || die "monitor command did not visibly start after retry"
+fi
 
 cat <<EOF
 CGCR started.

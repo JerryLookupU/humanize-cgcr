@@ -56,9 +56,19 @@ assert_contains "$CGCR_SKILL" '`/humanize:cgcr` is the public CGCR command name.
 assert_contains "$CGCR_SKILL" "setup-cgcr.sh" "cgcr skill calls setup script"
 assert_contains "$CGCR_SKILL" "cleanup-cgcr.sh" "cgcr skill documents task-end cleanup script"
 assert_contains "$CGCR_SKILL" "Codex is the only implementation agent" "cgcr skill preserves executor boundary"
-assert_contains "$SETUP_SCRIPT" 'CODEX_START_COMMAND="codex --yolo' "cgcr launcher starts Codex in yolo mode"
+assert_contains "$SETUP_SCRIPT" 'CODEX_CLI_COMMAND="codex --yolo' "cgcr launcher starts Codex in yolo mode"
+assert_contains "$SETUP_SCRIPT" 'start-codex.sh' "cgcr launcher writes short Codex startup script"
+assert_contains "$SETUP_SCRIPT" 'start-claude.sh' "cgcr launcher writes short Claude startup script"
 assert_contains "$SETUP_SCRIPT" '$(cat $(shell_quote "$CODEX_PROMPT_FILE"))' "cgcr launcher passes Codex prompt at startup"
 assert_contains "$SETUP_SCRIPT" "claude --dangerously-skip-permissions" "cgcr launcher starts Claude with active permission bypass flag"
+assert_contains "$SETUP_SCRIPT" "wait_for_pane_text" "cgcr launcher waits on tmux pane text before monitor submit"
+assert_contains "$SETUP_SCRIPT" '"bypass permissions on"' "cgcr launcher waits for Claude prompt readiness"
+assert_contains "$SETUP_SCRIPT" 'wait_for_pane_text "$CLAUDE_TARGET" "$GOAL_ID"' "cgcr launcher waits for rendered monitor command"
+assert_contains "$SETUP_SCRIPT" "tmux set-buffer" "cgcr launcher writes long commands through tmux buffer"
+assert_contains "$SETUP_SCRIPT" "tmux paste-buffer" "cgcr launcher pastes long commands through tmux buffer"
+assert_contains "$SETUP_SCRIPT" 'humanize-cgcr-$$-' "cgcr launcher uses shell pid in tmux buffer name"
+assert_contains "$SETUP_SCRIPT" "tmux send-keys -t \"\$target\" C-m" "cgcr launcher submits prompts with C-m after paste"
+assert_contains "$SETUP_SCRIPT" "retrying monitor submit once" "cgcr launcher retries monitor submit if Claude does not visibly start"
 
 setup_test_dir
 REPO="$TEST_DIR/repo"
@@ -99,12 +109,29 @@ PROMPT_FILE="$RUN_DIR/codex-goal-prompt.md"
 MONITOR_FILE="$RUN_DIR/claude-monitor-command.txt"
 RESOURCE_FILE="$RUN_DIR/resources.json"
 README_FILE="$RUN_DIR/README.md"
+CODEX_LAUNCHER_FILE="$RUN_DIR/start-codex.sh"
+CLAUDE_LAUNCHER_FILE="$RUN_DIR/start-claude.sh"
+CODEX_LAUNCHER_COMMAND="$(printf "'%s'" "$CODEX_LAUNCHER_FILE")"
+CLAUDE_WINDOW_COMMAND="$(printf "'%s'" "$CLAUDE_LAUNCHER_FILE")"
 
-for file in "$TASK_FILE" "$PROMPT_FILE" "$MONITOR_FILE" "$RESOURCE_FILE" "$README_FILE"; do
+for file in "$TASK_FILE" "$PROMPT_FILE" "$MONITOR_FILE" "$RESOURCE_FILE" "$README_FILE" "$CODEX_LAUNCHER_FILE" "$CLAUDE_LAUNCHER_FILE"; do
     if [[ -f "$file" ]]; then
         pass "created $(basename "$file")"
     else
         fail "created $(basename "$file")" "$file exists" "missing"
+    fi
+done
+
+for file in "$CODEX_LAUNCHER_FILE" "$CLAUDE_LAUNCHER_FILE"; do
+    if [[ -x "$file" ]]; then
+        pass "$(basename "$file") is executable"
+    else
+        fail "$(basename "$file") is executable" "executable" "not executable"
+    fi
+    if bash -n "$file"; then
+        pass "$(basename "$file") has valid shell syntax"
+    else
+        fail "$(basename "$file") has valid shell syntax" "bash -n passes" "syntax error"
     fi
 done
 
@@ -119,9 +146,16 @@ assert_contains "$MONITOR_FILE" "--principles" "Monitor command includes princip
 assert_contains "$RESOURCE_FILE" '"workflow": "CGCR"' "resources record workflow"
 assert_contains "$RESOURCE_FILE" '"tmux_session": "humanize-cgcr-test"' "resources record tmux session"
 assert_contains "$RESOURCE_FILE" '"codex_target": "humanize-cgcr-test:codex-goal.0"' "resources record Codex target"
-assert_contains "$RESOURCE_FILE" '"codex_start_command": "codex --yolo' "resources record Codex start command"
+assert_contains "$RESOURCE_FILE" "\"codex_start_command\": \"$CODEX_LAUNCHER_COMMAND\"" "resources record short Codex launcher command"
+assert_contains "$RESOURCE_FILE" '"codex_cli_command": "codex --yolo' "resources record Codex CLI command"
+assert_contains "$RESOURCE_FILE" '"codex_launcher_file": "'"$CODEX_LAUNCHER_FILE"'"' "resources record Codex launcher path"
 assert_contains "$RESOURCE_FILE" '"claude_monitor_target": "humanize-cgcr-test:claude-monitor.0"' "resources record Claude monitor target"
 assert_contains "$RESOURCE_FILE" '"claude_start_command": "claude --dangerously-skip-permissions' "resources record Claude start command"
+assert_contains "$RESOURCE_FILE" "\"claude_window_command\": \"$CLAUDE_WINDOW_COMMAND\"" "resources record short Claude window command"
+assert_contains "$RESOURCE_FILE" '"claude_launcher_file": "'"$CLAUDE_LAUNCHER_FILE"'"' "resources record Claude launcher path"
+assert_contains "$CODEX_LAUNCHER_FILE" 'exec codex --yolo' "Codex launcher executes codex"
+assert_contains "$CODEX_LAUNCHER_FILE" "$PROMPT_FILE" "Codex launcher reads prompt file"
+assert_contains "$CLAUDE_LAUNCHER_FILE" 'exec claude --dangerously-skip-permissions' "Claude launcher executes claude"
 assert_contains "$README_FILE" "Do not implement from Claude Code." "run README preserves monitor boundary"
 
 print_test_summary "CGCR Setup Tests"

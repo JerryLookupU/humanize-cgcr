@@ -100,14 +100,29 @@ user instead of silently following either side.
 The setup script creates:
 
 - a Humanize-owned resource directory under `.humanize/cgcr/<run-id>/`;
-- one tmux window named `codex-goal` running `codex --yolo` with the generated
-  Codex prompt as the startup prompt;
+- one tmux window named `codex-goal` running a short `start-codex.sh` launcher;
 - one tmux window named `claude-monitor` running `claude --dangerously-skip-permissions`;
 - a prepared Codex `/goal` prompt with the CGCR monitor contract;
 - a prepared Claude monitor command using `/humanize:monitor-codex-goal`.
 
 The current Codex session only launches the topology. The new Codex tmux window
 owns implementation.
+
+## Long Prompt Startup Protocol
+
+Long prompts are normal in CGCR. Do not type or paste the full Codex prompt into
+tmux. Treat long content as files and keep tmux input short:
+
+1. Write the task and generated `/goal` prompt into the run directory.
+2. Generate `start-codex.sh` and `start-claude.sh` in the run directory.
+3. Use tmux to paste and submit only the short launcher script paths.
+4. Let `start-codex.sh` read `codex-goal-prompt.md` and invoke `codex`.
+5. Start Claude through `start-claude.sh`, wait until the Claude prompt is
+   visibly ready, paste the monitor command, verify `MONITOR_TARGET_ID` appears
+   in the pane, then submit with `C-m`.
+
+The tmux layer must not be the transport for large prompt payloads. Its job is
+window orchestration and short command submission only.
 
 ## Execution
 
@@ -131,6 +146,8 @@ The run directory contains:
 - `task.md`
 - `codex-goal-prompt.md`
 - `claude-monitor-command.txt`
+- `start-codex.sh`
+- `start-claude.sh`
 - `resources.json`
 - `README.md`
 

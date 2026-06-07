@@ -47,12 +47,34 @@ Do not use CGCR as an RLCR command. RLCR remains
 
 CGCR expects two tmux panes or windows:
 
-- Codex pane/window: runs `codex` and the implementation `/goal`.
+- Codex pane/window: runs a short `start-codex.sh` launcher, which reads the
+  prepared `/goal` prompt from `.humanize/cgcr/<run-id>/codex-goal-prompt.md`
+  and starts `codex`.
 - Claude monitor pane/window: runs `claude` and `/humanize:cgcr` or the
   lower-level `/humanize:monitor-codex-goal`.
 
 Without a verified tmux target, Claude may observe transcript and git state but
 must not inject.
+
+## Long Prompt Startup Protocol
+
+Long prompts are expected in CGCR. The tmux layer must not carry large prompt
+payloads directly.
+
+Startup uses this file-backed protocol:
+
+1. The setup script writes the full task and generated Codex `/goal` prompt into
+   `.humanize/cgcr/<run-id>/`.
+2. The setup script creates executable `start-codex.sh` and `start-claude.sh`
+   launchers in the same run directory.
+3. tmux receives only short launcher paths, pasted through tmux buffers and
+   submitted with `C-m`.
+4. `start-codex.sh` reads `codex-goal-prompt.md` and invokes `codex`.
+5. The Claude monitor command is pasted only after the Claude prompt is visible;
+   the setup script verifies `MONITOR_TARGET_ID` is rendered before submitting.
+
+This keeps long prompts out of tmux input while preserving the two-window CGCR
+topology.
 
 ## Monitor Target
 

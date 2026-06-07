@@ -114,9 +114,15 @@ In Codex startup context this public command delegates to:
 ```
 
 This creates `.humanize/cgcr/<run-id>/`, starts a Codex `codex-goal` tmux
-window with a prepared `/goal` prompt, and starts a Claude `claude-monitor`
-tmux window with `/humanize:cgcr` or the lower-level
-`/humanize:monitor-codex-goal`.
+window through a short `start-codex.sh` launcher, and starts a Claude
+`claude-monitor` tmux window through a short `start-claude.sh` launcher.
+The full task and generated `/goal` prompt stay in run-dir files such as
+`codex-goal-prompt.md`; tmux only receives short launcher paths.
+
+The Claude monitor command is also staged as run-dir data. The setup script
+waits for the Claude prompt to become visible, pastes the monitor command
+through a tmux buffer, verifies the expected goal id appears in the pane, and
+then submits with `C-m`.
 
 ## Starting The Monitor
 
