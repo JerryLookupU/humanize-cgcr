@@ -66,6 +66,10 @@ The loop has two phases: **Implementation** (Claude works, Codex reviews summari
 
 Requires [codex CLI](https://github.com/openai/codex) for review. See the full [Installation Guide](docs/install-for-claude.md) for prerequisites and alternative setup options.
 
+For Codex-side `/flow:*` commands, run the Codex installer
+(`./scripts/install-skills-codex.sh`) and restart Codex so the local
+`flow@humanize-local` plugin is loaded.
+
 ## Quick Start
 
 1. **Generate an idea draft** from a loose thought (optional — skip if you already have a draft):
@@ -123,3 +127,5 @@ Requires [codex CLI](https://github.com/openai/codex) for review. See the full [
 ## License
 
 MIT
+
+# humanize-cgcr
